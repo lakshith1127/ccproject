@@ -10,9 +10,9 @@ router.get("/", async (req, res) => {
       id: doc.id,
       ...doc.data(),
     }));
-    res.json(events);
+    res.status(200).json(events);
   } catch (error) {
-    console.error("Error fetching events:", error);
+    console.error("❌ Error fetching events:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -22,21 +22,23 @@ router.post("/", async (req, res) => {
   try {
     const { title, description, dateTime, email } = req.body;
 
-    if (!title || !dateTime || !email) {
+    // Basic validation
+    if (!title?.trim() || !dateTime || !email?.trim()) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    // Save to Firestore
     const doc = await db.collection("events").add({
-      title,
-      description,
+      title: title.trim(),
+      description: description?.trim() || "",
       dateTime,
-      email,
+      email: email.trim(),
       createdAt: new Date().toISOString(),
     });
 
-    res.status(200).json({ message: "Event saved", id: doc.id });
+    res.status(201).json({ message: "Event saved", id: doc.id });
   } catch (error) {
-    console.error("Error saving event:", error);
+    console.error("❌ Error saving event:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -44,10 +46,20 @@ router.post("/", async (req, res) => {
 // ✅ DELETE event
 router.delete("/:id", async (req, res) => {
   try {
-    await db.collection("events").doc(req.params.id).delete();
-    res.status(204).send();
+    const { id } = req.params;
+
+    // Optional: check if event exists first
+    const docRef = db.collection("events").doc(id);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    await docRef.delete();
+    res.status(204).send(); // No content
   } catch (error) {
-    console.error("Error deleting event:", error);
+    console.error("❌ Error deleting event:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
