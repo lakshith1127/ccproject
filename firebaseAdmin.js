@@ -1,6 +1,9 @@
 const admin = require("firebase-admin");
 
-// Parse the JSON string stored in the environment variable
+if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+  throw new Error("FIREBASE_SERVICE_ACCOUNT environment variable is not set.");
+}
+
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 admin.initializeApp({
