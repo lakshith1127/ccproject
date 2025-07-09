@@ -1,6 +1,5 @@
 require("dotenv").config();
 const nodemailer = require("nodemailer");
-require("dotenv").config(); // In case this is run separately
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -10,15 +9,24 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const sendReminderEmail = (to, subject, text) => {
+// To send plain text or HTML emails
+const sendReminderEmail = async (to, subject, text, html = null) => {
   const mailOptions = {
-    from: process.env.EMAIL_USER,
+    from: `"Event Scheduler" <${process.env.EMAIL_USER}>`,
     to,
     subject,
     text,
+    ...(html && { html }), // Optional HTML support
   };
 
-  return transporter.sendMail(mailOptions);
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✅ Email sent to ${to}: ${info.response}`);
+    return info;
+  } catch (error) {
+    console.error(`❌ Failed to send email to ${to}:`, error.message);
+    throw error;
+  }
 };
 
 module.exports = sendReminderEmail;
