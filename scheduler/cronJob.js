@@ -8,56 +8,35 @@ cron.schedule("* * * * *", async () => {
   const oneHourLater = nowIST.clone().add(1, "hour");
 
   console.log(
-    "[NODE-CRON] Running at IST:",
-    nowIST.format("YYYY-MM-DD HH:mm:ss")
+    `[NODE-CRON] Running at IST: ${nowIST.format("YYYY-MM-DD HH:mm:ss")}`
   );
 
-  try {
-    const snapshot = await db.collection("events").get();
-    const events = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const snapshot = await db.collection("events").get();
+  const events = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-    console.log("[DEBUG] Total events fetched:", events.length);
+  for (const event of events) {
+    const eventTime = moment(event.date.toDate()).tz("Asia/Kolkata");
+    const diff = Math.abs(eventTime.diff(oneHourLater, "minutes"));
 
-    for (const event of events) {
-      if (!event.date || !event.email || !event.title) {
-        console.log(`[SKIP] Missing fields in event: ${event.id}`);
-        continue;
-      }
+    console.log(`Checking event: ${event.title}`);
+    console.log(`  → Event Time: ${eventTime.format("YYYY-MM-DD HH:mm:ss")}`);
+    console.log(
+      `  → One Hour Later: ${oneHourLater.format("YYYY-MM-DD HH:mm:ss")}`
+    );
+    console.log(`  → Difference in minutes: ${diff}`);
+    console.log(`  → Notified: ${event.notified}`);
 
-      const eventTime = moment(event.date.toDate()).tz("Asia/Kolkata");
-      const diff = Math.abs(eventTime.diff(oneHourLater, "minutes"));
-
-      console.log(`[DEBUG] Comparing event "${event.title}":`);
-      console.log(` - eventTime = ${eventTime.format("YYYY-MM-DD HH:mm")}`);
-      console.log(
-        ` - oneHourLater = ${oneHourLater.format("YYYY-MM-DD HH:mm")}`
+    if (diff <= 1 && !event.notified) {
+      await sendEmail(
+        event.email,
+        `⏰ Reminder: ${event.title}`,
+        `Your event "${event.title}" is scheduled at ${eventTime.format(
+          "YYYY-MM-DD HH:mm:ss"
+        )}.`
       );
-      console.log(` - diff = ${diff} mins | notified = ${event.notified}`);
 
-      if (diff <= 1 && !event.notified) {
-        try {
-          await sendEmail(
-            event.email,
-            `⏰ Reminder: ${event.title}`,
-            `Your event "${event.title}" is scheduled at ${eventTime.format(
-              "YYYY-MM-DD HH:mm:ss"
-            )} (IST).`
-          );
-
-          await db
-            .collection("events")
-            .doc(event.id)
-            .update({ notified: true });
-          console.log(`📨 Email sent to ${event.email}`);
-        } catch (emailError) {
-          console.error(
-            `❌ Failed to send email to ${event.email}`,
-            emailError
-          );
-        }
-      }
+      await db.collection("events").doc(event.id).update({ notified: true });
+      console.log(`📨 Email sent to ${event.email}`);
     }
-  } catch (err) {
-    console.error("[CRON ERROR]", err);
   }
 });
