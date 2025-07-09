@@ -1,29 +1,39 @@
 const cron = require("node-cron");
 const db = require("../firebaseAdmin");
 const sendEmail = require("../utils/sendEmail");
+const moment = require("moment-timezone");
 
+// CRON job runs every minute
 cron.schedule("* * * * *", async () => {
-  console.log(`[NODE-CRON] Running at ${new Date().toLocaleTimeString()}`);
+  try {
+    const nowIST = moment().tz("Asia/Kolkata");
+    const oneHourLater = nowIST.clone().add(1, "hour");
 
-  const now = new Date();
-  const snapshot = await db.collection("events").get();
-  const events = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    console.log(
+      `[NODE-CRON] Running at IST: ${nowIST.format("YYYY-MM-DD HH:mm:ss")}`
+    );
 
-  for (const event of events) {
-    const eventTime = new Date(event.date);
-    const diff = (eventTime - now) / 60000;
+    const snapshot = await db.collection("events").get();
+    const events = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-    if (diff >= 59 && diff <= 61 && !event.notified) {
-      await sendEmail(
-        event.email,
-        `⏰ Reminder: ${event.title}`,
-        `Your event "${
-          event.title
-        }" is scheduled at ${eventTime.toLocaleString()}.`
-      );
+    for (const event of events) {
+      const eventTime = moment(event.date.toDate()).tz("Asia/Kolkata");
+      const diff = Math.abs(eventTime.diff(oneHourLater, "minutes"));
 
-      await db.collection("events").doc(event.id).update({ notified: true });
-      console.log(`📨 Email sent to ${event.email}`);
+      if (diff <= 1 && !event.notified) {
+        await sendEmail(
+          event.email,
+          `⏰ Reminder: ${event.title}`,
+          `Your event "${event.title}" is scheduled at ${eventTime.format(
+            "YYYY-MM-DD hh:mm A"
+          )} IST.`
+        );
+
+        await db.collection("events").doc(event.id).update({ notified: true });
+        console.log(`📨 Email sent to ${event.email}`);
+      }
     }
+  } catch (error) {
+    console.error("❌ CRON job error:", error.message);
   }
 });
